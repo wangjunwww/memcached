@@ -10,7 +10,7 @@
  *
  */
 #include "memcached.h"
-
+//hello
 /*
  * Since the hash function does bit manipulation, it needs to know
  * whether it's big or little-endian. ENDIAN_LITTLE and ENDIAN_BIG
