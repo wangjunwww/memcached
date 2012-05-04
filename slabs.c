@@ -401,6 +401,7 @@ static void *memory_allocate(size_t size) {
     if (mem_base == NULL) {
         /* We are not using a preallocated large memory chunk */
         ret = malloc(size);
+	AB_DBG("memory_allocate(): malloc(%d)=%p\n", size, ret);
     } else {
         ret = mem_current;
 

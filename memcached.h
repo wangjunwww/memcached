@@ -23,6 +23,8 @@
 
 #include "sasl_defs.h"
 
+#include "ab_debug.h"
+
 /** Maximum length of a key. */
 #define KEY_MAX_LENGTH 250
 
