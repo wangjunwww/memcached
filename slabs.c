@@ -263,6 +263,7 @@ static void *do_slabs_alloc(const size_t size, unsigned int id) {
         }
     }
 
+    AB_DBG("debug point 5\n");
     if (ret) {
         p->requested += size;
         MEMCACHED_SLABS_ALLOCATE(size, id, p->size, ret);
@@ -270,6 +271,7 @@ static void *do_slabs_alloc(const size_t size, unsigned int id) {
         MEMCACHED_SLABS_ALLOCATE_FAILED(size, id);
     }
 
+    AB_DBG("debug point 6\n");
     return ret;
 }
 
@@ -397,11 +399,15 @@ static void do_slabs_stats(ADD_STAT add_stats, void *c) {
 
 static void *memory_allocate(size_t size) {
     void *ret;
+    extern cat_t ar;
+    extern cat_t aw;
+    label_t L1 = {ar, aw};
+    label_t L2 = {};
 
     if (mem_base == NULL) {
         /* We are not using a preallocated large memory chunk */
-        ret = malloc(size);
-	AB_DBG("memory_allocate(): malloc(%d)=%p\n", size, ret);
+        ret = ab_malloc(size, L2);
+	AB_DBG("memory_allocate(): ab_malloc(%d)=%p\n", size, ret);
     } else {
         ret = mem_current;
 
@@ -817,6 +823,7 @@ int start_slab_maintenance_thread(void) {
         fprintf(stderr, "Can't create thread: %s\n", strerror(ret));
         return -1;
     }
+    AB_DBG("start_slab_maintenance_thread(): thread %lu %d created\n", maintenance_tid, getpid());
     return 0;
 }
 

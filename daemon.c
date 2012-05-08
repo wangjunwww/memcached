@@ -45,10 +45,12 @@ int daemonize(int nochdir, int noclose)
 {
     int fd;
 
+    AB_DBG("daemonize(): parent pid=%d\n", getpid());
     switch (fork()) {
     case -1:
         return (-1);
     case 0:
+	AB_DBG("daemonize(): child pid=%d\n", getpid());
         break;
     default:
         _exit(EXIT_SUCCESS);

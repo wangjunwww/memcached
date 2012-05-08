@@ -4702,6 +4702,9 @@ static bool sanitycheck(void) {
     return true;
 }
 
+cat_t ar = 0b00000110;
+cat_t aw = 0b11100000;
+
 int main (int argc, char **argv) {
     int c;
     bool lock_memory = false;
@@ -4739,6 +4742,24 @@ int main (int argc, char **argv) {
         [SLAB_AUTOMOVE] = "slab_automove",
         NULL
     };
+
+    //arbiter settings init
+    absys_thread_control(AB_SET_ME_SPECIAL);
+    init_client_state(NULL, NULL);
+    AB_INFO("Memcached main(): pid %d forked by arbiter!\n", getpid());
+
+    //ar = create_category(CAT_S);
+    //aw = create_category(CAT_I);
+    label_t L1 = {ar, aw};
+    label_t L2 = {};
+    void *addr;
+    size_t s = 1024*1024;
+    //sleep(10);
+    addr = ab_malloc(s, L2);
+    AB_DBG("main(): ab_malloc(%d)=%p\n", s, addr);
+    *(unsigned long *)addr = 0xdeadbeef;
+    AB_DBG("main(): debug point 1: *addr=%lx\n", *(unsigned long *)addr);
+    
 
     if (!sanitycheck()) {
         return EX_OSERR;
@@ -5219,8 +5240,6 @@ int main (int argc, char **argv) {
 
     /* Drop privileges no longer needed */
     drop_privileges();
-
-    AB_INFO("Memcached main(): pid %d forked by arbiter!\n", getpid());
 
     /* enter the event loop */
     if (event_base_loop(main_base, 0) != 0) {

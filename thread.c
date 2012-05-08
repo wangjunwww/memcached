@@ -226,6 +226,7 @@ static void create_worker(void *(*func)(void *), void *arg) {
                 strerror(ret));
         exit(1);
     }
+    AB_DBG("create_worker(): worker thread %lu %d created\n", thread, getpid());
 }
 
 /*
@@ -289,6 +290,7 @@ static void *worker_libevent(void *arg) {
      * all threads have finished initializing.
      */
 
+    absys_thread_control(AB_SET_ME_SPECIAL);
     pthread_mutex_lock(&init_lock);
     init_count++;
     pthread_cond_signal(&init_cond);

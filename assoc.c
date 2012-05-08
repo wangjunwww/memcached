@@ -256,6 +256,7 @@ int start_assoc_maintenance_thread() {
         fprintf(stderr, "Can't create thread: %s\n", strerror(ret));
         return -1;
     }
+    AB_DBG("start_assoc_maintenance_thread(): thread %lu %d created\n", maintenance_tid, getpid());
     return 0;
 }
 

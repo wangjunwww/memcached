@@ -24,6 +24,10 @@
 #include "sasl_defs.h"
 
 #include "ab_debug.h"
+#include <ab_api.h>
+#include <ab_os_interface.h>
+#include <abthread_protocol.h>
+#include <lib_client.h>
 
 /** Maximum length of a key. */
 #define KEY_MAX_LENGTH 250

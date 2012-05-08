@@ -207,6 +207,9 @@ AC_ARG_WITH(libevent,
 
 dnl ------------------------------------------------------
 dnl libevent detection.  swiped from Tor.  modified a bit.
+echo "!!!!!!!!!!!!!!!!!!!!!!!"
+CPPFLAGS="$CPPFLAGS -I$AB_ROOT/common/include -I$LIB_CLIENT"
+echo $CPPFLAGS
 
 LIBEVENT_URL=http://www.monkey.org/~provos/libevent/
 
@@ -536,12 +539,12 @@ dnl to detect the function ;-)
 if test "$ICC" = "yes"
 then
    dnl ICC trying to be gcc.
-   CFLAGS="$CFLAGS -diag-disable 187 -Wall -Werror"
+   CFLAGS="$CFLAGS -diag-disable 187 -Wall"
    AC_DEFINE([_GNU_SOURCE],[1],[find sigignore on Linux])
 elif test "$GCC" = "yes"
 then
   GCC_VERSION=`$CC -dumpversion`
-  CFLAGS="$CFLAGS -Wall -Werror -pedantic -Wmissing-prototypes -Wmissing-declarations -Wredundant-decls"
+  CFLAGS="$CFLAGS -Wall -pedantic -Wmissing-prototypes -Wmissing-declarations -Wredundant-decls"
   case $GCC_VERSION in
     4.4.*)
     CFLAGS="$CFLAGS -fno-strict-aliasing"
