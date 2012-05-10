@@ -263,7 +263,6 @@ static void *do_slabs_alloc(const size_t size, unsigned int id) {
         }
     }
 
-    AB_DBG("debug point 5\n");
     if (ret) {
         p->requested += size;
         MEMCACHED_SLABS_ALLOCATE(size, id, p->size, ret);
@@ -271,7 +270,6 @@ static void *do_slabs_alloc(const size_t size, unsigned int id) {
         MEMCACHED_SLABS_ALLOCATE_FAILED(size, id);
     }
 
-    AB_DBG("debug point 6\n");
     return ret;
 }
 
@@ -399,14 +397,11 @@ static void do_slabs_stats(ADD_STAT add_stats, void *c) {
 
 static void *memory_allocate(size_t size) {
     void *ret;
-    extern cat_t ar;
-    extern cat_t aw;
-    label_t L1 = {ar, aw};
-    label_t L2 = {};
+    label_t L = {};
 
     if (mem_base == NULL) {
         /* We are not using a preallocated large memory chunk */
-        ret = ab_malloc(size, L2);
+        ret = ab_malloc(size, L);
 	AB_DBG("memory_allocate(): ab_malloc(%d)=%p\n", size, ret);
     } else {
         ret = mem_current;

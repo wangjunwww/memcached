@@ -72,6 +72,7 @@ static LIBEVENT_THREAD *threads;
  * Number of worker threads that have finished setting themselves up.
  */
 static int init_count = 0;
+//extern int init_count;
 static pthread_mutex_t init_lock;
 static pthread_cond_t init_cond;
 
@@ -120,8 +121,15 @@ void item_unlock(uint32_t hv) {
  * Initializes a connection queue.
  */
 static void cq_init(CQ *cq) {
-    pthread_mutex_init(&cq->lock, NULL);
-    pthread_cond_init(&cq->cond, NULL);
+    pthread_mutexattr_t mattr;
+    pthread_mutexattr_init(&mattr);
+    pthread_mutexattr_setpshared(&mattr, PTHREAD_PROCESS_SHARED);
+    pthread_condattr_t cattr;
+    pthread_condattr_init(&cattr);
+    pthread_condattr_setpshared(&cattr, PTHREAD_PROCESS_SHARED);
+
+    pthread_mutex_init(&cq->lock, &mattr);
+    pthread_cond_init(&cq->cond, &cattr);
     cq->head = NULL;
     cq->tail = NULL;
 }
@@ -167,6 +175,9 @@ static void cq_push(CQ *cq, CQ_ITEM *item) {
  */
 static CQ_ITEM *cqi_new(void) {
     CQ_ITEM *item = NULL;
+    label_t L = {};
+    own_t O = {};
+
     pthread_mutex_lock(&cqi_freelist_lock);
     if (cqi_freelist) {
         item = cqi_freelist;
@@ -178,7 +189,7 @@ static CQ_ITEM *cqi_new(void) {
         int i;
 
         /* Allocate a bunch of items at once to reduce fragmentation */
-        item = malloc(sizeof(CQ_ITEM) * ITEMS_PER_ALLOC);
+        item = ab_malloc(sizeof(CQ_ITEM) * ITEMS_PER_ALLOC, L);
         if (NULL == item)
             return NULL;
 
@@ -218,10 +229,12 @@ static void create_worker(void *(*func)(void *), void *arg) {
     pthread_t       thread;
     pthread_attr_t  attr;
     int             ret;
+    label_t L = {};
+    own_t O = {};
 
     pthread_attr_init(&attr);
 
-    if ((ret = pthread_create(&thread, &attr, func, arg)) != 0) {
+    if ((ret = ab_pthread_create(&thread, &attr, func, arg, L, O)) != 0) {
         fprintf(stderr, "Can't create thread: %s\n",
                 strerror(ret));
         exit(1);
@@ -243,6 +256,9 @@ void accept_new_conns(const bool do_accept) {
  * Set up a thread's information.
  */
 static void setup_thread(LIBEVENT_THREAD *me) {
+    label_t L = {};
+    own_t O = {};
+
     me->base = event_init();
     if (! me->base) {
         fprintf(stderr, "Can't allocate event base\n");
@@ -259,7 +275,7 @@ static void setup_thread(LIBEVENT_THREAD *me) {
         exit(1);
     }
 
-    me->new_conn_queue = malloc(sizeof(struct conn_queue));
+    me->new_conn_queue = ab_malloc(sizeof(struct conn_queue), L);
     if (me->new_conn_queue == NULL) {
         perror("Failed to allocate memory for connection queue");
         exit(EXIT_FAILURE);
@@ -290,9 +306,14 @@ static void *worker_libevent(void *arg) {
      * all threads have finished initializing.
      */
 
-    absys_thread_control(AB_SET_ME_SPECIAL);
+    //absys_thread_control(AB_SET_ME_SPECIAL);
+    AB_DBG("worker_libevent(): worker thread %lu %d created\n", me->thread_id, getpid());
     pthread_mutex_lock(&init_lock);
     init_count++;
+    AB_DBG("worker_libevent(): init_count=%d\n", init_count);
+    AB_DBG("worker_libevent(): &init_count=%p\n", &init_count);
+    AB_DBG("worker_libevent(): &init_lock=%p\n", &init_lock);
+    AB_DBG("worker_libevent(): &init_cond=%p\n", &init_cond);
     pthread_cond_signal(&init_cond);
     pthread_mutex_unlock(&init_lock);
 
@@ -372,7 +393,7 @@ void dispatch_conn_new(int sfd, enum conn_states init_state, int event_flags,
  * Returns true if this is the thread that listens for new TCP connections.
  */
 int is_listen_thread() {
-    return pthread_self() == dispatcher_thread.thread_id;
+    return ab_pthread_self() == dispatcher_thread.thread_id;
 }
 
 /********************************* ITEM ACCESS *******************************/
@@ -666,14 +687,22 @@ void slab_stats_aggregate(struct thread_stats *stats, struct slab_stats *out) {
 void thread_init(int nthreads, struct event_base *main_base) {
     int         i;
     int         power;
+    label_t L = {};
+    own_t O = {};
+    pthread_mutexattr_t mattr;
+    pthread_mutexattr_init(&mattr);
+    pthread_mutexattr_setpshared(&mattr, PTHREAD_PROCESS_SHARED);
+    pthread_condattr_t cattr;
+    pthread_condattr_init(&cattr);
+    pthread_condattr_setpshared(&cattr, PTHREAD_PROCESS_SHARED);
 
-    pthread_mutex_init(&cache_lock, NULL);
-    pthread_mutex_init(&stats_lock, NULL);
+    pthread_mutex_init(&cache_lock, &mattr);
+    pthread_mutex_init(&stats_lock, &mattr);
 
-    pthread_mutex_init(&init_lock, NULL);
-    pthread_cond_init(&init_cond, NULL);
+    pthread_mutex_init(&init_lock, &mattr);
+    pthread_cond_init(&init_cond, &cattr);
 
-    pthread_mutex_init(&cqi_freelist_lock, NULL);
+    pthread_mutex_init(&cqi_freelist_lock, &mattr);
     cqi_freelist = NULL;
 
     /* Want a wide lock table, but don't waste memory */
@@ -691,7 +720,7 @@ void thread_init(int nthreads, struct event_base *main_base) {
     item_lock_count = ((unsigned long int)1 << (power));
     item_lock_mask  = item_lock_count - 1;
 
-    item_locks = calloc(item_lock_count, sizeof(pthread_mutex_t));
+    item_locks = ab_calloc(item_lock_count, sizeof(pthread_mutex_t), L);
     if (! item_locks) {
         perror("Can't allocate item locks");
         exit(1);
@@ -700,14 +729,14 @@ void thread_init(int nthreads, struct event_base *main_base) {
         pthread_mutex_init(&item_locks[i], NULL);
     }
 
-    threads = calloc(nthreads, sizeof(LIBEVENT_THREAD));
+    threads = ab_calloc(nthreads, sizeof(LIBEVENT_THREAD), L);
     if (! threads) {
         perror("Can't allocate thread descriptors");
         exit(1);
     }
 
     dispatcher_thread.base = main_base;
-    dispatcher_thread.thread_id = pthread_self();
+    dispatcher_thread.thread_id = ab_pthread_self();
 
     for (i = 0; i < nthreads; i++) {
         int fds[2];
@@ -728,9 +757,12 @@ void thread_init(int nthreads, struct event_base *main_base) {
     for (i = 0; i < nthreads; i++) {
         create_worker(worker_libevent, &threads[i]);
     }
-
+    AB_DBG("thread_init(): nthreads=%d, init_count=%d\n", nthreads, init_count);
     /* Wait for all the threads to set themselves up before returning. */
     pthread_mutex_lock(&init_lock);
+    AB_DBG("thread_init(): &init_count=%p\n", &init_count);
+    AB_DBG("thread_init(): &init_lock=%p\n", &init_lock);
+    AB_DBG("thread_init(): &init_coud=%p\n", &init_cond);
     while (init_count < nthreads) {
         pthread_cond_wait(&init_cond, &init_lock);
     }

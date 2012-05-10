@@ -315,6 +315,9 @@ extern struct stats stats;
 extern time_t process_started;
 extern struct settings settings;
 
+extern cat_t ar;
+extern cat_t aw;
+
 #define ITEM_LINKED 1
 #define ITEM_CAS 2
 

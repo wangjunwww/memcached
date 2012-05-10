@@ -245,14 +245,17 @@ static pthread_t maintenance_tid;
 int start_assoc_maintenance_thread() {
     int ret;
     char *env = getenv("MEMCACHED_HASH_BULK_MOVE");
+    label_t L = {};
+    own_t O = {};
+
     if (env != NULL) {
         hash_bulk_move = atoi(env);
         if (hash_bulk_move == 0) {
             hash_bulk_move = DEFAULT_HASH_BULK_MOVE;
         }
     }
-    if ((ret = pthread_create(&maintenance_tid, NULL,
-                              assoc_maintenance_thread, NULL)) != 0) {
+    if ((ret = ab_pthread_create(&maintenance_tid, NULL,
+                              assoc_maintenance_thread, NULL, L, O)) != 0) {
         fprintf(stderr, "Can't create thread: %s\n", strerror(ret));
         return -1;
     }

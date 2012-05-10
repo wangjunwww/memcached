@@ -352,10 +352,12 @@ conn *conn_new(const int sfd, enum conn_states init_state,
                 const int event_flags,
                 const int read_buffer_size, enum network_transport transport,
                 struct event_base *base) {
+    label_t L = {};
+    own_t O = {};
     conn *c = conn_from_freelist();
 
     if (NULL == c) {
-        if (!(c = (conn *)calloc(1, sizeof(conn)))) {
+        if (!(c = (conn *)ab_calloc(1, sizeof(conn), L))) {
             fprintf(stderr, "calloc()\n");
             return NULL;
         }
@@ -376,12 +378,12 @@ conn *conn_new(const int sfd, enum conn_states init_state,
         c->msgsize = MSG_LIST_INITIAL;
         c->hdrsize = 0;
 
-        c->rbuf = (char *)malloc((size_t)c->rsize);
-        c->wbuf = (char *)malloc((size_t)c->wsize);
-        c->ilist = (item **)malloc(sizeof(item *) * c->isize);
-        c->suffixlist = (char **)malloc(sizeof(char *) * c->suffixsize);
-        c->iov = (struct iovec *)malloc(sizeof(struct iovec) * c->iovsize);
-        c->msglist = (struct msghdr *)malloc(sizeof(struct msghdr) * c->msgsize);
+        c->rbuf = (char *)ab_malloc((size_t)c->rsize, L);
+        c->wbuf = (char *)ab_malloc((size_t)c->wsize, L);
+        c->ilist = (item **)ab_malloc(sizeof(item *) * c->isize, L);
+        c->suffixlist = (char **)ab_malloc(sizeof(char *) * c->suffixsize, L);
+        c->iov = (struct iovec *)ab_malloc(sizeof(struct iovec) * c->iovsize, L);
+        c->msglist = (struct msghdr *)ab_malloc(sizeof(struct msghdr) * c->msgsize, L);
 
         if (c->rbuf == 0 || c->wbuf == 0 || c->ilist == 0 || c->iov == 0 ||
                 c->msglist == 0 || c->suffixlist == 0) {
@@ -514,20 +516,20 @@ void conn_free(conn *c) {
     if (c) {
         MEMCACHED_CONN_DESTROY(c);
         if (c->hdrbuf)
-            free(c->hdrbuf);
+            ab_free(c->hdrbuf);
         if (c->msglist)
-            free(c->msglist);
+            ab_free(c->msglist);
         if (c->rbuf)
-            free(c->rbuf);
+            ab_free(c->rbuf);
         if (c->wbuf)
-            free(c->wbuf);
+            ab_free(c->wbuf);
         if (c->ilist)
-            free(c->ilist);
+            ab_free(c->ilist);
         if (c->suffixlist)
-            free(c->suffixlist);
+            ab_free(c->suffixlist);
         if (c->iov)
-            free(c->iov);
-        free(c);
+            ab_free(c->iov);
+        ab_free(c);
     }
 }
 
@@ -4702,8 +4704,7 @@ static bool sanitycheck(void) {
     return true;
 }
 
-cat_t ar = 0b00000110;
-cat_t aw = 0b11100000;
+cat_t ar, aw; //more to add...
 
 int main (int argc, char **argv) {
     int c;
@@ -4747,19 +4748,8 @@ int main (int argc, char **argv) {
     absys_thread_control(AB_SET_ME_SPECIAL);
     init_client_state(NULL, NULL);
     AB_INFO("Memcached main(): pid %d forked by arbiter!\n", getpid());
-
-    //ar = create_category(CAT_S);
-    //aw = create_category(CAT_I);
-    label_t L1 = {ar, aw};
-    label_t L2 = {};
-    void *addr;
-    size_t s = 1024*1024;
-    //sleep(10);
-    addr = ab_malloc(s, L2);
-    AB_DBG("main(): ab_malloc(%d)=%p\n", s, addr);
-    *(unsigned long *)addr = 0xdeadbeef;
-    AB_DBG("main(): debug point 1: *addr=%lx\n", *(unsigned long *)addr);
-    
+    ar = create_category(CAT_S);
+    aw = create_category(CAT_I);
 
     if (!sanitycheck()) {
         return EX_OSERR;
