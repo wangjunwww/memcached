@@ -59,10 +59,11 @@ static bool expanding = false;
 static unsigned int expand_bucket = 0;
 
 void assoc_init(const int hashtable_init) {
+    label_t L = {};
     if (hashtable_init) {
         hashpower = hashtable_init;
     }
-    primary_hashtable = calloc(hashsize(hashpower), sizeof(void *));
+    primary_hashtable = ab_calloc(hashsize(hashpower), sizeof(void *), L);
     if (! primary_hashtable) {
         fprintf(stderr, "Failed to init hashtable.\n");
         exit(EXIT_FAILURE);
@@ -122,9 +123,10 @@ static item** _hashitem_before (const char *key, const size_t nkey, const uint32
 
 /* grows the hashtable to the next power of 2. */
 static void assoc_expand(void) {
+    label_t L = {};
     old_hashtable = primary_hashtable;
 
-    primary_hashtable = calloc(hashsize(hashpower + 1), sizeof(void *));
+    primary_hashtable = ab_calloc(hashsize(hashpower + 1), sizeof(void *), L);
     if (primary_hashtable) {
         if (settings.verbose > 1)
             fprintf(stderr, "Hash table expansion starting\n");
