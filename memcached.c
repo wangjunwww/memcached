@@ -352,8 +352,7 @@ conn *conn_new(const int sfd, enum conn_states init_state,
                 const int event_flags,
                 const int read_buffer_size, enum network_transport transport,
                 struct event_base *base) {
-    label_t L = {};
-    own_t O = {};
+    label_t L = {ar, br};
     conn *c = conn_from_freelist();
 
     if (NULL == c) {
@@ -622,7 +621,7 @@ static void conn_shrink(conn *c) {
 /**
  * Convert a state name to a human readable form.
  */
-static const char *state_text(enum conn_states state) {
+const char *state_text(enum conn_states state) {
     const char* const statenames[] = { "conn_listening",
                                        "conn_new_cmd",
                                        "conn_waiting",
@@ -4704,7 +4703,9 @@ static bool sanitycheck(void) {
     return true;
 }
 
-cat_t ar, aw; //more to add...
+cat_t ar, aw;
+cat_t br, bw;
+cat_t cr, cw; //more to add...
 
 int main (int argc, char **argv) {
     int c;
@@ -4750,6 +4751,17 @@ int main (int argc, char **argv) {
     AB_INFO("Memcached main(): pid %d forked by arbiter!\n", getpid());
     ar = create_category(CAT_S);
     aw = create_category(CAT_I);
+    br = create_category(CAT_S);
+    bw = create_category(CAT_I);
+    cr = create_category(CAT_S);
+    cw = create_category(CAT_I);
+
+    label_t L_tmp;
+    own_t O_tmp;
+    get_label(L_tmp);
+    get_ownership(O_tmp);
+    print_label(L_tmp);
+    print_own(O_tmp);
 
     if (!sanitycheck()) {
         return EX_OSERR;

@@ -173,39 +173,42 @@ static void cq_push(CQ *cq, CQ_ITEM *item) {
 /*
  * Returns a fresh connection queue item.
  */
-static CQ_ITEM *cqi_new(void) {
+static CQ_ITEM *cqi_new(label_t Label) {
     CQ_ITEM *item = NULL;
-    label_t L = {};
-    own_t O = {};
+    label_t L = {ar, br};
 
-    pthread_mutex_lock(&cqi_freelist_lock);
-    if (cqi_freelist) {
-        item = cqi_freelist;
-        cqi_freelist = item->next;
-    }
-    pthread_mutex_unlock(&cqi_freelist_lock);
+//    pthread_mutex_lock(&cqi_freelist_lock);
+//    if (cqi_freelist) {
+//        item = cqi_freelist;
+//        cqi_freelist = item->next;
+//    }
+//    pthread_mutex_unlock(&cqi_freelist_lock);
+//
+//    if (NULL == item) {
+//        int i;
+//
+//        /* Allocate a bunch of items at once to reduce fragmentation */
+//        item = ab_malloc(sizeof(CQ_ITEM) * ITEMS_PER_ALLOC, L);
+//        if (NULL == item)
+//            return NULL;
+//
+//        /*
+//         * Link together all the new items except the first one
+//         * (which we'll return to the caller) for placement on
+//         * the freelist.
+//         */
+//        for (i = 2; i < ITEMS_PER_ALLOC; i++)
+//            item[i - 1].next = &item[i];
+//
+//        pthread_mutex_lock(&cqi_freelist_lock);
+//        item[ITEMS_PER_ALLOC - 1].next = cqi_freelist;
+//        cqi_freelist = &item[1];
+//        pthread_mutex_unlock(&cqi_freelist_lock);
+//    }
 
-    if (NULL == item) {
-        int i;
-
-        /* Allocate a bunch of items at once to reduce fragmentation */
-        item = ab_malloc(sizeof(CQ_ITEM) * ITEMS_PER_ALLOC, L);
-        if (NULL == item)
-            return NULL;
-
-        /*
-         * Link together all the new items except the first one
-         * (which we'll return to the caller) for placement on
-         * the freelist.
-         */
-        for (i = 2; i < ITEMS_PER_ALLOC; i++)
-            item[i - 1].next = &item[i];
-
-        pthread_mutex_lock(&cqi_freelist_lock);
-        item[ITEMS_PER_ALLOC - 1].next = cqi_freelist;
-        cqi_freelist = &item[1];
-        pthread_mutex_unlock(&cqi_freelist_lock);
-    }
+    item = ab_malloc(sizeof(CQ_ITEM), Label);
+    if (NULL == item)
+        return NULL;
 
     return item;
 }
@@ -215,10 +218,11 @@ static CQ_ITEM *cqi_new(void) {
  * Frees a connection queue item (adds it to the freelist.)
  */
 static void cqi_free(CQ_ITEM *item) {
-    pthread_mutex_lock(&cqi_freelist_lock);
-    item->next = cqi_freelist;
-    cqi_freelist = item;
-    pthread_mutex_unlock(&cqi_freelist_lock);
+    //pthread_mutex_lock(&cqi_freelist_lock);
+    //item->next = cqi_freelist;
+    //cqi_freelist = item;
+    //pthread_mutex_unlock(&cqi_freelist_lock);
+    ab_free(item);
 }
 
 
@@ -229,12 +233,11 @@ static void create_worker(void *(*func)(void *), void *arg) {
     pthread_t       thread;
     pthread_attr_t  attr;
     int             ret;
-    label_t L = {};
-    own_t O = {};
+    LIBEVENT_THREAD *me = arg;
 
     pthread_attr_init(&attr);
 
-    if ((ret = ab_pthread_create(&thread, &attr, func, arg, L, O)) != 0) {
+    if ((ret = ab_pthread_create(&thread, &attr, func, arg, me->L, me->O)) != 0) {
         fprintf(stderr, "Can't create thread: %s\n",
                 strerror(ret));
         exit(1);
@@ -256,8 +259,7 @@ void accept_new_conns(const bool do_accept) {
  * Set up a thread's information.
  */
 static void setup_thread(LIBEVENT_THREAD *me) {
-    label_t L = {};
-    own_t O = {};
+    label_t L = {ar, br};
 
     me->base = event_init();
     if (! me->base) {
@@ -306,14 +308,16 @@ static void *worker_libevent(void *arg) {
      * all threads have finished initializing.
      */
 
-    //absys_thread_control(AB_SET_ME_SPECIAL);
+    me->thread_id = ab_pthread_self();
     AB_DBG("worker_libevent(): worker thread %lu %d created\n", me->thread_id, getpid());
+    label_t L_tmp;
+    own_t O_tmp;
+    get_label(L_tmp);
+    get_ownership(O_tmp);
+    print_label(L_tmp);
+    print_own(O_tmp);
     pthread_mutex_lock(&init_lock);
     init_count++;
-    AB_DBG("worker_libevent(): init_count=%d\n", init_count);
-    AB_DBG("worker_libevent(): &init_count=%p\n", &init_count);
-    AB_DBG("worker_libevent(): &init_lock=%p\n", &init_lock);
-    AB_DBG("worker_libevent(): &init_cond=%p\n", &init_cond);
     pthread_cond_signal(&init_cond);
     pthread_mutex_unlock(&init_lock);
 
@@ -368,11 +372,13 @@ static int last_thread = -1;
  */
 void dispatch_conn_new(int sfd, enum conn_states init_state, int event_flags,
                        int read_buffer_size, enum network_transport transport) {
-    CQ_ITEM *item = cqi_new();
+    AB_INFO("=====================================================\n");
+    AB_INFO("dispatch_conn_new(sfd=%d, conn_state=%s, network=%d)\n", sfd, state_text(init_state), transport);
     int tid = (last_thread + 1) % settings.num_threads;
 
     LIBEVENT_THREAD *thread = threads + tid;
 
+    CQ_ITEM *item = cqi_new(thread->L);
     last_thread = tid;
 
     item->sfd = sfd;
@@ -382,6 +388,7 @@ void dispatch_conn_new(int sfd, enum conn_states init_state, int event_flags,
     item->transport = transport;
 
     cq_push(thread->new_conn_queue, item);
+    AB_DBG("dispatch_conn_new(): thread %lu dispatched\n", thread->thread_id);
 
     MEMCACHED_CONN_DISPATCH(sfd, thread->thread_id);
     if (write(thread->notify_send_fd, "", 1) != 1) {
@@ -687,8 +694,7 @@ void slab_stats_aggregate(struct thread_stats *stats, struct slab_stats *out) {
 void thread_init(int nthreads, struct event_base *main_base) {
     int         i;
     int         power;
-    label_t L = {};
-    own_t O = {};
+    label_t L = {ar, br};
     pthread_mutexattr_t mattr;
     pthread_mutexattr_init(&mattr);
     pthread_mutexattr_setpshared(&mattr, PTHREAD_PROCESS_SHARED);
@@ -751,18 +757,22 @@ void thread_init(int nthreads, struct event_base *main_base) {
         setup_thread(&threads[i]);
         /* Reserve three fds for the libevent base, and two for the pipe */
         stats.reserved_fds += 5;
-    }
+    } 
+
+    /* setup label for worker threads */
+    label_t La = {ar, aw, br}, Lb = {br, bw, ar};
+    own_t Oa = {ar, aw}, Ob = {br, bw};
+    memcpy(threads[0].L, La, sizeof(label_t));
+    memcpy(threads[0].O, Oa, sizeof(own_t));
+    memcpy(threads[1].L, Lb, sizeof(label_t));
+    memcpy(threads[1].O, Ob, sizeof(own_t));
 
     /* Create threads after we've done all the libevent setup. */
     for (i = 0; i < nthreads; i++) {
         create_worker(worker_libevent, &threads[i]);
     }
-    AB_DBG("thread_init(): nthreads=%d, init_count=%d\n", nthreads, init_count);
     /* Wait for all the threads to set themselves up before returning. */
     pthread_mutex_lock(&init_lock);
-    AB_DBG("thread_init(): &init_count=%p\n", &init_count);
-    AB_DBG("thread_init(): &init_lock=%p\n", &init_lock);
-    AB_DBG("thread_init(): &init_coud=%p\n", &init_cond);
     while (init_count < nthreads) {
         pthread_cond_wait(&init_cond, &init_lock);
     }

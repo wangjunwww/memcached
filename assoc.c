@@ -59,7 +59,7 @@ static bool expanding = false;
 static unsigned int expand_bucket = 0;
 
 void assoc_init(const int hashtable_init) {
-    label_t L = {};
+    label_t L = {ar, br};
     if (hashtable_init) {
         hashpower = hashtable_init;
     }
@@ -123,7 +123,7 @@ static item** _hashitem_before (const char *key, const size_t nkey, const uint32
 
 /* grows the hashtable to the next power of 2. */
 static void assoc_expand(void) {
-    label_t L = {};
+    label_t L = {ar, br};
     old_hashtable = primary_hashtable;
 
     primary_hashtable = ab_calloc(hashsize(hashpower + 1), sizeof(void *), L);
@@ -247,8 +247,8 @@ static pthread_t maintenance_tid;
 int start_assoc_maintenance_thread() {
     int ret;
     char *env = getenv("MEMCACHED_HASH_BULK_MOVE");
-    label_t L = {};
-    own_t O = {};
+    label_t L = {ar, br};
+    own_t O = {ar, aw, br, bw};
 
     if (env != NULL) {
         hash_bulk_move = atoi(env);

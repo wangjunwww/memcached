@@ -397,7 +397,7 @@ static void do_slabs_stats(ADD_STAT add_stats, void *c) {
 
 static void *memory_allocate(size_t size) {
     void *ret;
-    label_t L = {};
+    label_t L = {ar, br};
 
     if (mem_base == NULL) {
         /* We are not using a preallocated large memory chunk */
